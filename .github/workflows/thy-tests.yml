@@ -1,0 +1,70 @@
+name: THY BDD Tests
+
+on:
+  # Started by n8n (GitHub API) or manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      issue_key:
+        description: 'Jira story key to run, e.g. THY-1 (empty = run all)'
+        required: false
+        default: ''
+  # Also runs when feature files or test code change on main
+  push:
+    branches: [main]
+    paths: ['features/**', 'steps/**', 'pages/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thy-tests
+  cancel-in-progress: false
+
+jobs:
+  test:
+    # Repo variable RUNNER = self-hosted switches to the runner on your Mac
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run BDD tests
+        env:
+          ISSUE_KEY: ${{ inputs.issue_key }}
+        run: |
+          npx bddgen
+          if [ -n "$ISSUE_KEY" ]; then
+            npx playwright test --grep "@$ISSUE_KEY"
+          else
+            npx playwright test
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_id }}
+          path: |
+            playwright-report/
+            cucumber-report/
+            test-results/
+          retention-days: 14
+
+      - name: Send results to n8n
+        if: always()
+        env:
+          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+          ISSUE_KEY: ${{ inputs.issue_key }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/notify-n8n.mjs

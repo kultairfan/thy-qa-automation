@@ -1,0 +1,21 @@
+{
+  "name": "thy-qa-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BDD (Gherkin) UI tests for turkishairlines.com with Playwright + playwright-bdd. Practice project.",
+  "scripts": {
+    "test": "bddgen && playwright test",
+    "test:headed": "bddgen && playwright test --headed",
+    "test:story": "bddgen && playwright test --grep",
+    "report": "playwright show-report",
+    "steps:export": "bddgen export",
+    "notify": "node scripts/notify-n8n.mjs",
+    "typecheck": "bddgen && tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "^22.0.0",
+    "playwright-bdd": "9.2.1",
+    "typescript": "5.9.3"
+  }
+}
