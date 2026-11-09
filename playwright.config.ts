@@ -26,10 +26,10 @@ export default defineConfig({
     locale: 'en-US',
     timezoneId: 'Europe/Istanbul',
     navigationTimeout: 45_000,
-    screenshot: 'only-on-failure',
+    // Screenshot of the final state (last step) of every scenario
+    screenshot: 'on',
     trace: 'retain-on-failure',
-   // video: 'retain-on-failure',
-    video:'on',
+    video: 'on',
   },
   projects: [
     {
