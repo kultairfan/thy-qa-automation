@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_key:
-        description: 'Jira story key to run, e.g. THY-1 (empty = run all)'
+        description: 'Jira story key to run, e.g. THY-23 (empty = run all)'
         required: false
         default: ''
   # Also runs when feature files or test code change on main
@@ -15,6 +15,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: thy-tests
@@ -27,7 +29,13 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.65.0-noble
       options: --user 1001
+    # The latest report is published to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     timeout-minutes: 15
+    env:
+      REPORT_URL: https://kultairfan.github.io/thy-qa-automation/
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +53,13 @@ jobs:
             npx playwright test
           fi
 
+      - name: Prepare report (summary + last-step screenshots)
+        if: always()
+        env:
+          ISSUE_KEY: ${{ inputs.issue_key }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/notify-n8n.mjs prepare
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,10 +71,19 @@ jobs:
             test-results/
           retention-days: 14
 
+      - name: Upload report to GitHub Pages
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report
+
+      - name: Publish report
+        id: deploy
+        if: always()
+        uses: actions/deploy-pages@v4
+
       - name: Send results to n8n
         if: always()
         env:
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
-          ISSUE_KEY: ${{ inputs.issue_key }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/notify-n8n.mjs
+        run: node scripts/notify-n8n.mjs send
