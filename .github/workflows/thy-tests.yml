@@ -1,4 +1,4 @@
-name: THY BDD Tests
+name: BDD Tests
 
 on:
   # Started by n8n (GitHub API) or manually from the Actions tab
@@ -22,22 +22,17 @@ concurrency:
 
 jobs:
   test:
-    # Repo variable RUNNER = self-hosted switches to the runner on your Mac
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    # Official Playwright image: browsers are preinstalled, so no slow install step
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble
+      options: --user 1001
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
 
       - name: Run BDD tests
         env:

@@ -2,36 +2,32 @@
 
 The AI "Gherkin writer" may ONLY use the steps below when it writes feature files.
 If a scenario needs a step that is not in this list, the scenario must be tagged `@pending`
-and a human writes the new step definition first.
+and a human writes the new step definition first. Refresh the list with `npx bddgen export`.
 
-Refresh this list after adding steps:
+Test site: https://blazedemo.com
 
-```bash
-npx bddgen export
-```
+## Search (home page + results)
 
-## Navigation / page
+- `Given I open the BlazeDemo home page`
+- `When I search flights from {string} to {string}`
+  - departure: Paris, Philadelphia, Boston, Portland, San Diego, Mexico City, São Paolo
+  - destination: Buenos Aires, Rome, London, Berlin, New York, Dublin, Cairo
+- `Then I should see the heading {string}` (example: `"Flights from Paris to London:"`)
+- `Then I should see at least {int} flight(s)`
+- `Then every flight should have a {string} button` (`"Choose This Flight"`)
+- `Then the page title should be {string}`
 
-- `Given I open the Turkish Airlines home page`
-- `Given I open the Turkish Airlines home page in {string}` (example: `"en-tr"`)
-- `Then the page URL should contain {string}`
-- `Then the page language should be {string}` (html lang attribute, example: `"en"`)
+## Purchase + confirmation
 
-## Flight booker
-
-- `When I select the {string} trip type` (`"one-way"` or `"round-trip"`)
-- `When I type {string} into the {string} field` (field: `"origin"` or `"destination"`)
-- `Then the airport suggestions should include {string}` (example: `"ESB"`)
-- `Then the flight search form should be visible`
-- `Then the {string} field label should be {string}` (example: `"origin"`, `"From"`)
-
-## Language
-
-- `When I change the site language to {string}` (`"English"` or `"Türkçe"`)
-- `Then the language selector should show {string}` (example: `"EN-TR"`)
+- `When I choose flight number {int} from the list` (1 = first row)
+- `Then the purchase summary should show {string}` (example: `"Total Cost"`)
+- `When I fill the {string} field with {string}` (field: name, address, city, state, zip code, name on card)
+- `When I purchase the flight`
+- `Then the confirmation should show a booking {string}` (`"Id"`)
+- `Then the confirmation should show {string} as {string}` (example: `"Status"`, `"PendingCapture"`)
 
 ## Rules for generated features
 
 - File name: `features/<JIRA-KEY>.feature`, first line tags: `@<JIRA-KEY> @smoke`
-- Maximum 2 scenarios per story (live production site, keep the load low)
-- No login, booking, payment or check-in scenarios
+- Maximum 2 scenarios per story
+- Never type real personal or card data; use obvious test values (e.g. "Test Passenger")

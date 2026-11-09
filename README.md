@@ -1,16 +1,16 @@
-# THY QA Automation (Playwright + Gherkin)
+# QA Automation (Playwright + Gherkin)
 
-turkishairlines.com için BDD (Gherkin) UI testleri. Kişisel QA sandbox projesi.
-Jira story'leri: `THY-1` (destinasyon otomatik tamamlama) ve `THY-6` (dil değiştirme).
+BDD (Gherkin) UI testleri. Kişisel QA sandbox projesi.
 
-> Canlı production sitesi: sadece salt okuma senaryoları, düşük frekans, giriş/rezervasyon/ödeme yok.
+> turkishairlines.com otomasyonu engellediği (bot koruması) için koşumlar **blazedemo.com** demo uçuş sitesine karşı yapılıyor.
+> Jira story'leri: `THY-23` (uçuş arama) ve `THY-24` (uçuş satın alma).
 
 ## Yapı
 
 ```
 features/            Gherkin senaryoları (bir story = bir dosya, ör. THY-1.feature)
 steps/               Step tanımları (fixtures.ts + *.steps.ts)
-pages/               Page Object'ler (HomePage.ts)
+pages/               Page Object'ler (BlazeDemoPages.ts)
 STEP_LIBRARY.md      AI'ın kullanabileceği hazır step listesi
 scripts/notify-n8n.mjs  Sonuç özetini n8n webhook'una gönderir
 .github/workflows/   GitHub Actions koşumu
@@ -29,7 +29,7 @@ npx playwright install chromium
 
 ```bash
 npm test                         # tüm senaryolar
-npm run test:story -- @THY-1     # sadece bir story
+npm run test:story -- @THY-23    # sadece bir story
 npm run test:headed              # tarayıcıyı görerek
 npm run report                   # Playwright HTML raporu
 open cucumber-report/index.html  # Cucumber HTML raporu
@@ -50,16 +50,8 @@ git remote add origin https://github.com/<kullanici-adin>/thy-qa-automation.git
 git push -u origin main
 ```
 
-GitHub → **Actions** → **THY BDD Tests** → **Run workflow** (issue_key: `THY-1` ya da boş).
+GitHub → **Actions** → **BDD Tests** → **Run workflow** (issue_key: `THY-23` ya da boş).
 Raporlar koşumun altındaki **Artifacts** bölümünde.
-
-### Site GitHub sunucularını engellerse
-
-Bot koruması veri merkezi IP'lerini engelleyebilir. Bu durumda testleri kendi Mac'inde koşturan
-bir **self-hosted runner** kullan (dışarıya bağlantı açar, port açman gerekmez):
-
-1. Repo → Settings → Actions → Runners → **New self-hosted runner** → macOS → verilen komutları çalıştır.
-2. Repo → Settings → Secrets and variables → Actions → **Variables** → `RUNNER` = `self-hosted`.
 
 ## 4. n8n bağlantısı (sonraki adım)
 

@@ -11,7 +11,7 @@ export default defineConfig({
   testDir,
   timeout: 90_000,
   expect: { timeout: 15_000 },
-  // Live production site: keep the load low and the runs sequential.
+  // Public demo site: keep the runs sequential and light.
   workers: 1,
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
@@ -22,8 +22,8 @@ export default defineConfig({
     cucumberReporter('html', { outputFile: 'cucumber-report/index.html' }),
   ],
   use: {
-    baseURL: 'https://www.turkishairlines.com',
-    locale: 'tr-TR',
+    baseURL: 'https://blazedemo.com',
+    locale: 'en-US',
     timezoneId: 'Europe/Istanbul',
     navigationTimeout: 45_000,
     screenshot: 'only-on-failure',
