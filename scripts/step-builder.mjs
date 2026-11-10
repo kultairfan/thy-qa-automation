@@ -167,7 +167,7 @@ function parseJson(text) {
 }
 
 async function callModel({ provider, model }, prompt) {
-  const signal = AbortSignal.timeout(240_000);
+  const signal = AbortSignal.timeout({ gemini: 120_000, groq: 90_000 }[provider] || 240_000);
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
