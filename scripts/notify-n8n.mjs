@@ -39,14 +39,22 @@ function collect(suite, path, out) {
       const last = (test.results || []).at(-1) || {};
       const tags = [...new Set([...(spec.tags || []), ...(test.tags || [])].map((t) => (t.startsWith('@') ? t : `@${t}`)))];
       const shots = (last.attachments || []).filter((a) => a.name === 'screenshot' && a.path);
+      const steps = flattenSteps(last.steps);
+      let status = test.status === 'expected' ? 'passed' : test.status === 'skipped' ? 'skipped' : test.status === 'flaky' ? 'flaky' : 'failed';
+      let error = last.error ? clean(last.error.message).slice(0, 1500) : null;
+      // A scenario without steps tests nothing: never report it as passed
+      if (status !== 'skipped' && steps.length === 0) {
+        status = 'failed';
+        error = 'The scenario has no steps, so nothing was tested. Add Given/When/Then steps to the feature file.';
+      }
       out.push({
         feature: here.filter((t) => !t.endsWith('.spec.js')).join(' > '),
         scenario: spec.title,
         tags,
-        status: test.status === 'expected' ? 'passed' : test.status === 'skipped' ? 'skipped' : test.status === 'flaky' ? 'flaky' : 'failed',
+        status,
         durationMs: last.duration || 0,
-        steps: flattenSteps(last.steps),
-        error: last.error ? clean(last.error.message).slice(0, 1500) : null,
+        steps,
+        error,
         _screenshotPath: shots.length ? shots[shots.length - 1].path : null,
       });
     }
