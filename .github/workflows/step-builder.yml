@@ -51,6 +51,12 @@ jobs:
           DRAFT_FEATURE: ${{ inputs.draft_feature }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          # Fallback providers: used only when their secret exists (order: LLM_ORDER)
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-120b' }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_MODEL: ${{ vars.NVIDIA_MODEL || 'openai/gpt-oss-120b' }}
+          LLM_ORDER: ${{ vars.LLM_ORDER || 'gemini,groq,nvidia' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
         run: node scripts/step-builder.mjs
