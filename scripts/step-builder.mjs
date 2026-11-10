@@ -316,7 +316,7 @@ async function openPullRequest(files, answer, attempts) {
     answer.notes ? `**Notes from the model:** ${answer.notes}` : '',
     RUN_URL ? `\nRun log and artifacts: ${RUN_URL}` : '',
     '',
-    '> Please review the locators and assertions before merging. After merge, move the story back to **Ready for QA**.',
+    '> Please review the locators and assertions before merging. Merging is enough: it starts the test run automatically, a passing story is moved to Done and a failing scenario opens (or updates) a bug.',
   ].join('\n');
   const pr = await gh('POST', '/pulls', { title: `${KEY}: new steps by Step Builder${possibleDefect ? ' (possible defect)' : ''}`, head: branch, base: 'main', body });
   return pr.data.html_url;
