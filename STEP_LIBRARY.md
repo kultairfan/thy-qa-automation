@@ -39,3 +39,8 @@ Test site: https://blazedemo.com
 - `When I fill the login password with {string}`
 - `When I click the {string} button`
 - `Then I should see an error message {string}`
+
+## Added by Step Builder (THY-34)
+
+- `Given I open the BlazeDemo register page`
+- `When I fill the register field {string} with {string}`
