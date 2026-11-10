@@ -8,10 +8,8 @@ on:
         description: 'Jira story key to run, e.g. THY-23 (empty = run all)'
         required: false
         default: ''
-  # Also runs when feature files or test code change on main
-  push:
-    branches: [main]
-    paths: ['features/**', 'steps/**', 'pages/**']
+  # A merged pull request no longer starts this workflow by itself: GitHub tells n8n (PR Merged workflow),
+  # and n8n starts the tests of that story only, or every test when the PR has the label "run-all-tests".
 
 permissions:
   contents: read
