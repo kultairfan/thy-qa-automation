@@ -94,6 +94,9 @@ PROJECT CONVENTIONS
 - Use web-first assertions (await expect(locator).toBeVisible(), toHaveText, toContainText, toHaveURL, toHaveTitle).
 - Test data must be obviously fake (e.g. "test.user@example.com", "WrongPassword123").
 - Base URL is configured: navigate with relative paths such as page.goto('/login').
+- The draft feature is a starting point. Keep its intent, but replace any line (also an existing step) that does not
+  fit what the site really shows. 'I should see the heading {string}' only matches real headings (h1-h6 / role heading).
+- The Then steps must check the outcome the story asks for (for a negative test: the message the site shows).
 
 OUTPUT: only JSON with this shape:
 {"files":[{"path":"pages/LoginPage.ts","content":"..."},{"path":"steps/login.steps.ts","content":"..."},{"path":"steps/fixtures.ts","content":"..."}],
@@ -118,7 +121,7 @@ ${code}
 
 PAGE SNAPSHOTS (site: ${BASE_URL})
 ${JSON.stringify(snapshots, null, 1).slice(0, 30000)}
-${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the full JSON again.\nERROR OUTPUT:\n${previous.slice(-4000)}` : ''}`;
+${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the full JSON again.\nERROR OUTPUT:\n${previous.slice(-7000)}` : ''}`;
 }
 
 // ---------------------------------------------------------------- 3. Gemini
@@ -177,12 +180,31 @@ function run(cmd) {
   catch (e) { return { ok: false, out: `${e.stdout || ''}\n${e.stderr || ''}`.replace(/\u001b\[[0-9;]*m/g, '') }; }
 }
 
+// Playwright writes an accessibility snapshot of the page at the moment of failure (error-context.md).
+// Sending it back lets the model see what the site really showed (texts, roles, error messages).
+function pageAtFailure() {
+  const found = [];
+  const walk = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name === 'error-context.md') found.push(full);
+    }
+  };
+  walk('test-results');
+  if (!found.length) return '';
+  const text = readFileSync(found[0], 'utf8');
+  const start = text.indexOf('```yaml');
+  return `\n\nPAGE AT THE MOMENT OF FAILURE (accessibility snapshot):\n${text.slice(start >= 0 ? start : 0).slice(0, 3500)}`;
+}
+
 function validate() {
   const cfg = env.PW_CONFIG ? ` -c ${env.PW_CONFIG}` : '';
   for (const [name, cmd] of [['bddgen', `npx bddgen${cfg}`], ['typecheck', 'npx tsc --noEmit'], ['scenario run', `npx playwright test${cfg} --grep @${KEY} --reporter=line --retries=0`]]) {
     const r = run(cmd);
     log(`${name}: ${r.ok ? 'OK' : 'FAILED'}`);
-    if (!r.ok) return { ok: false, stage: name, out: r.out };
+    if (!r.ok) return { ok: false, stage: name, out: name === 'scenario run' ? r.out.slice(-3000) + pageAtFailure() : r.out };
   }
   return { ok: true };
 }
