@@ -118,7 +118,9 @@ PROJECT CONVENTIONS
 - Page objects live in pages/*.ts as classes whose constructor takes a Playwright Page.
 - A new page object must be registered as a fixture in steps/fixtures.ts. Return the FULL updated fixtures.ts.
 - Put new steps in a NEW file steps/<area>.steps.ts and new page objects in a NEW file pages/<Name>Page.ts.
-- Do not change or duplicate existing step definitions or existing page objects.
+- Do not change or duplicate existing step definitions or existing page objects. Never define a step text that already
+  exists (same text in steps/*.ts) - reuse it in the feature. 'I fill the {string} field with {string}' works on any form
+  field (found by label, name or id), so use it for login / register forms too.
 - Step texts are Cucumber expressions: use {string} and {int} for parameters. Keep them short and reusable.
 - Locators: use ONLY elements that appear in the PAGE SNAPSHOTS below. Prefer getByRole(role, { name }), then getByLabel,
   then #id or [name="..."]. Never use XPath, nth-child or generated CSS classes.
@@ -288,6 +290,36 @@ function fixImports(files) {
   }
 }
 
+// A model sometimes re-defines a step that already exists (bddgen: "Multiple definitions matched scenario step").
+// Remove such duplicates from the files written in this attempt, so the existing definition is used.
+function removeDuplicateSteps(files, originals) {
+  const re = /^(Given|When|Then)\(\s*(['"`])((?:\\.|(?!\2).)*)\2/gm;
+  const existing = new Map();
+  for (const f of readdirSync('steps')) {
+    const p = `steps/${f}`;
+    if (!f.endsWith('.ts') || files.includes(p)) continue;
+    for (const m of readFileSync(p, 'utf8').matchAll(re)) existing.set(m[3], p);
+  }
+  for (const p of files) {
+    if (!/^steps\/.+\.ts$/.test(p) || originals[p] !== null || !existsSync(p)) continue; // only new step files
+    let src = readFileSync(p, 'utf8');
+    for (const m of [...src.matchAll(re)].reverse()) {
+      if (!existing.has(m[3])) continue;
+      // cut the whole call: from the match to its closing ");" (balanced parentheses)
+      let depth = 0, end = -1;
+      for (let i = m.index; i < src.length; i++) {
+        if (src[i] === '(') depth++;
+        else if (src[i] === ')' && --depth === 0) { end = i + 1; break; }
+      }
+      if (end < 0) continue;
+      if (src[end] === ';') end++;
+      src = src.slice(0, m.index) + src.slice(end).replace(/^\s*\n/, '');
+      log(`removed duplicate step "${m[3]}" from ${p} (already defined in ${existing.get(m[3])})`);
+    }
+    writeFileSync(p, src);
+  }
+}
+
 function validate() {
   const cfg = env.PW_CONFIG ? ` -c ${env.PW_CONFIG}` : '';
   for (const [name, cmd] of [['bddgen', `npx bddgen${cfg}`], ['typecheck', 'npx tsc --noEmit'], ['scenario run', `npx playwright test${cfg} --grep @${KEY} --reporter=line --retries=0`]]) {
@@ -373,6 +405,7 @@ try {
     answer = await askLLM(snapshots, ctx, failure && `[${failure.stage}]\n${failure.out}`, attempts);
     const files = applyAnswer(answer, originals);
     fixImports(files);
+    removeDuplicateSteps(files, originals);
     log(`wrote (${env.LLM_STUB_FILE ? 'stub' : MODEL_NAME()}): ${files.join(', ')}`);
     const v = validate();
     if (v.ok) { failure = null; break; }
