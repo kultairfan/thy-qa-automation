@@ -22,7 +22,9 @@ const env = process.env;
 const KEY = (env.ISSUE_KEY || '').trim();
 const BASE_URL = (env.BASE_URL || 'https://blazedemo.com').replace(/\/$/, '');
 const PAGES = (env.SITE_PAGES || '/,/login,/register,/vacation.html,/password/reset').split(',').map((p) => p.trim()).filter(Boolean);
-const MODEL = env.GEMINI_MODEL || 'gemini-2.5-flash';
+// First model that answers wins; a 404 (retired / not available for this key) moves to the next one.
+const MODELS = [...new Set([env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-flash-latest'].filter(Boolean))];
+let MODEL = MODELS[0];
 const MAX_ATTEMPTS = 3;
 const RUN_URL = env.GITHUB_RUN_ID ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}` : '';
 const missingSteps = (env.MISSING_STEPS || '').split('\n').map((s) => s.trim()).filter(Boolean);
@@ -124,13 +126,18 @@ async function askGemini(prompt, attempt) {
     return Array.isArray(stub) ? stub[Math.min(attempt - 1, stub.length - 1)] : stub;
   }
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY secret is not set in the repository.');
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
-  });
-  const j = await res.json();
-  if (!res.ok) throw new Error(`Gemini API error ${res.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  let res, j;
+  for (const model of MODELS.slice(MODELS.indexOf(MODEL))) {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
+    });
+    j = await res.json();
+    if (res.status !== 404) { MODEL = model; break; }
+    log(`model ${model} is not available (404), trying the next one`);
+  }
+  if (!res.ok) throw new Error(`Gemini API error ${res.status} (model ${MODEL}): ${JSON.stringify(j).slice(0, 300)}`);
   const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
   return JSON.parse(text.replace(/^```json\s*|```\s*$/g, ''));
 }
