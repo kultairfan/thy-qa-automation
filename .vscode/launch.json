@@ -1,0 +1,61 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Editörde açık olan .feature dosyasini calistirir (orn. THY-33.feature)
+      "name": "Run current feature",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "bddgen",
+      "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
+      "args": ["test", "${fileBasename}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Ayni sey, tarayici gorunur sekilde
+      "name": "Run current feature (headed)",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "bddgen",
+      "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
+      "args": ["test", "${fileBasename}", "--headed"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Editör gerekmez: feature adini sorar (orn. THY-33)
+      "name": "Run feature by name",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "bddgen",
+      "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
+      "args": ["test", "${input:featureName}.feature", "--headed"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Tum feature'lar
+      "name": "Run all features",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "bddgen",
+      "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
+      "args": ["test"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "featureName",
+      "type": "promptString",
+      "description": "Feature adi (uzantisiz), orn. THY-33",
+      "default": "THY-33"
+    }
+  ]
+}

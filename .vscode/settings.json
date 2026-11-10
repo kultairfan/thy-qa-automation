@@ -10,6 +10,9 @@
   "cucumberautocomplete.syncfeatures": "features/**/*.feature",
   "cucumberautocomplete.strictGherkinCompletion": true,
 
+  // .feature files are owned by the Cucumber extension (not behave/java runners)
+  "files.associations": { "*.feature": "cucumber" },
+
   // Generated test files: hide from search
   "search.exclude": { ".features-gen/**": true }
 }

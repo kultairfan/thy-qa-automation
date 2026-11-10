@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Feature dosyalarini .features-gen/ altina Playwright testlerine cevirir
+      "label": "bddgen",
+      "type": "shell",
+      "command": "npx bddgen",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent" }
+    }
+  ]
+}
