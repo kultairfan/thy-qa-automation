@@ -2,15 +2,15 @@
 //
 // 1. Opens the pages of the site under test with Playwright and records what is on them
 //    (accessibility tree + form fields, buttons and links with their ids / names / labels).
-// 2. Asks Gemini to write the missing page object + step definition code, following the
+// 2. Asks an LLM (Gemini, then Groq / NVIDIA as fallbacks) to write the missing page object + step code, following the
 //    project conventions and using only locators that exist in the recorded snapshot.
 // 3. Validates the result in this runner: bddgen (all steps defined) -> tsc -> runs the
-//    scenario against the real site. On failure the error is sent back to Gemini (max 3 tries).
+//    scenario against the real site. On failure the error is sent back to the LLM (max 3 tries).
 // 4. When green, pushes the files to a new branch and opens a pull request for human review.
 // 5. Posts the outcome to n8n, which comments on the Jira story.
 //
 // Env: ISSUE_KEY, MISSING_STEPS (one per line), STORY, DRAFT_FEATURE, GEMINI_API_KEY,
-//      GEMINI_MODEL, BASE_URL, SITE_PAGES, GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID,
+//      GEMINI_MODEL, GROQ_API_KEY, GROQ_MODEL, NVIDIA_API_KEY, NVIDIA_MODEL, LLM_ORDER, BASE_URL, SITE_PAGES, GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID,
 //      GITHUB_SERVER_URL, N8N_WEBHOOK_URL, DRY_RUN=1 (no PR), LLM_STUB_FILE (local tests),
 //      PW_CONFIG (alternative playwright config), PW_CHROMIUM_PATH (local tests)
 import { chromium } from '@playwright/test';
@@ -22,11 +22,26 @@ const env = process.env;
 const KEY = (env.ISSUE_KEY || '').trim();
 const BASE_URL = (env.BASE_URL || 'https://blazedemo.com').replace(/\/$/, '');
 const PAGES = (env.SITE_PAGES || '/,/login,/register,/vacation.html,/password/reset').split(',').map((p) => p.trim()).filter(Boolean);
-// First model that answers wins. 404 (retired / not available for this key) moves to the next model
-// at once; 429/500/503 (busy) is retried with a pause, then the next model is tried.
-const MODELS = [...new Set([env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'].filter(Boolean))];
+// LLM candidates in LLM_ORDER (default gemini, groq, nvidia); a provider is used only when its key is set.
+// The first one that answers wins and later attempts start from it. Busy / rate limited (429, 5xx) is
+// retried after a pause; any other error moves on to the next candidate.
+// groq and nvidia speak the OpenAI chat/completions API. Groq's free tier allows ~8K tokens per minute,
+// so it gets the compact prompt.
+const OPENAI_COMPATIBLE = {
+  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', key: env.GROQ_API_KEY, compact: true,
+    extra: (model) => ({ max_completion_tokens: 3500, response_format: { type: 'json_object' }, ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}) }) },
+  nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions', key: env.NVIDIA_API_KEY, compact: false,
+    extra: () => ({ max_tokens: 6000 }) },
+};
+const CANDIDATES = (env.LLM_ORDER || 'gemini,groq,nvidia').split(',').map((x) => x.trim()).flatMap((provider) => {
+  if (provider === 'gemini') return env.GEMINI_API_KEY ? [...new Set([env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3-flash-preview'].filter(Boolean))].map((model) => ({ provider, model })) : [];
+  if (provider === 'groq') return env.GROQ_API_KEY ? [{ provider, model: env.GROQ_MODEL || 'openai/gpt-oss-120b' }] : [];
+  if (provider === 'nvidia') return env.NVIDIA_API_KEY ? [{ provider, model: env.NVIDIA_MODEL || 'openai/gpt-oss-120b' }] : [];
+  return [];
+});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let MODEL = MODELS[0];
+let current = 0;
+const MODEL_NAME = () => (CANDIDATES[current] ? `${CANDIDATES[current].provider}/${CANDIDATES[current].model}` : 'none');
 const MAX_ATTEMPTS = 3;
 const RUN_URL = env.GITHUB_RUN_ID ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}` : '';
 const missingSteps = (env.MISSING_STEPS || '').split('\n').map((s) => s.trim()).filter(Boolean);
@@ -77,8 +92,24 @@ function projectContext() {
   return { files, library: read('STEP_LIBRARY.md') };
 }
 
-function buildPrompt(snapshots, ctx, previous) {
-  const code = Object.entries(ctx.files).map(([p, c]) => `--- ${p} ---\n${c}`).join('\n\n');
+// compact = smaller prompt for providers with a low tokens-per-minute limit (Groq free tier: 8K TPM):
+// only the pages the story talks about, step signatures instead of full step code, a short page object example.
+function buildPrompt(snapshots, ctx, previous, compact = false) {
+  let code = Object.entries(ctx.files).map(([p, c]) => `--- ${p} ---\n${c}`).join('\n\n');
+  let library = ctx.library;
+  let pages = snapshots;
+  if (compact) {
+    const signatures = Object.entries(ctx.files)
+      .filter(([p]) => p.startsWith('steps/') && p !== 'steps/fixtures.ts')
+      .flatMap(([, c]) => [...c.matchAll(/^(Given|When|Then)\('([^']+)'/gm)].map((m) => `${m[1]}('${m[2]}')`));
+    const example = Object.entries(ctx.files).find(([p]) => p.startsWith('pages/'));
+    code = `--- steps/fixtures.ts ---\n${ctx.files['steps/fixtures.ts'] || ''}\n\n--- existing step definitions (signatures) ---\n${signatures.join('\n')}`
+      + (example ? `\n\n--- ${example[0]} (style example, first part) ---\n${example[1].slice(0, 1500)}` : '');
+    library = '(see existing step definitions above)';
+    const text = `${env.STORY || ''} ${env.DRAFT_FEATURE || ''} ${missingSteps.join(' ')}`.toLowerCase();
+    const relevant = snapshots.filter((s) => { const w = (s.url || '').replace(/^https?:\/\/[^/]+/, '').split(/[/.]/).filter((x) => x.length > 3 && x !== 'html'); return w.some((x) => text.includes(x)); });
+    pages = (relevant.length ? relevant : snapshots.slice(0, 2)).map((s) => ({ ...s, aria: (s.aria || '').slice(0, 1500) }));
+  }
   return `You are a senior Playwright + TypeScript test automation engineer working in a playwright-bdd 9 project.
 A Gherkin scenario for Jira story ${KEY} needs step definitions that do not exist yet. Write the missing code.
 
@@ -114,43 +145,74 @@ MISSING STEPS
 ${missingSteps.map((s) => '- ' + s).join('\n') || '(not provided)'}
 
 EXISTING STEP LIBRARY
-${ctx.library}
+${library}
 
 EXISTING CODE
 ${code}
 
 PAGE SNAPSHOTS (site: ${BASE_URL})
-${JSON.stringify(snapshots, null, 1).slice(0, 30000)}
-${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the full JSON again.\nERROR OUTPUT:\n${previous.slice(-7000)}` : ''}`;
+${JSON.stringify(pages, compact ? null : undefined, compact ? 0 : 1).slice(0, compact ? 9000 : 30000)}
+${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the full JSON again.\nERROR OUTPUT:\n${previous.slice(compact ? -3500 : -7000)}` : ''}`;
 }
 
-// ---------------------------------------------------------------- 3. Gemini
-async function askGemini(prompt, attempt) {
+// ---------------------------------------------------------------- 3. LLM (Gemini, Groq fallback)
+function parseJson(text) {
+  const t = String(text || '').trim().replace(/^```(?:json)?\s*|```\s*$/g, '');
+  try { return JSON.parse(t); } catch { return JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); }
+}
+
+async function callModel({ provider, model }, prompt) {
+  const signal = AbortSignal.timeout(240_000);
+  if (provider === 'gemini') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
+    });
+    const j = await res.json().catch(() => ({}));
+    return { res, j, text: j.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '' };
+  }
+  // Groq / NVIDIA: OpenAI-compatible chat completions
+  const p = OPENAI_COMPATIBLE[provider];
+  const res = await fetch(p.url, {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${p.key}` },
+    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.2, ...p.extra(model) }),
+  });
+  const j = await res.json().catch(() => ({}));
+  return { res, j, text: j.choices?.[0]?.message?.content || '' };
+}
+
+async function askLLM(snapshots, ctx, previous, attempt) {
   if (env.LLM_STUB_FILE) {
     const stub = JSON.parse(readFileSync(env.LLM_STUB_FILE, 'utf8'));
     return Array.isArray(stub) ? stub[Math.min(attempt - 1, stub.length - 1)] : stub;
   }
-  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY secret is not set in the repository.');
-  let res, j;
-  models: for (const model of MODELS.slice(MODELS.indexOf(MODEL))) {
-    for (let tryNo = 1; tryNo <= 3; tryNo++) {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
-      });
-      j = await res.json().catch(() => ({}));
-      MODEL = model;
-      if (res.ok) break models;
-      if (res.status === 404) { log(`model ${model} is not available (404), trying the next one`); continue models; }
-      if (![429, 500, 503].includes(res.status)) break models;
-      log(`model ${model} is busy (${res.status}), try ${tryNo}/3`);
-      if (tryNo < 3) await sleep(tryNo * 15_000);
+  if (!CANDIDATES.length) throw new Error('No LLM key: set GEMINI_API_KEY, GROQ_API_KEY or NVIDIA_API_KEY as a repository secret.');
+  let last = '';
+  for (; current < CANDIDATES.length; current++) {
+    const c = CANDIDATES[current];
+    const prompt = buildPrompt(snapshots, ctx, previous, Boolean(OPENAI_COMPATIBLE[c.provider]?.compact));
+    const tries = c.provider === 'gemini' ? 2 : 3;
+    for (let tryNo = 1; tryNo <= tries; tryNo++) {
+      let res, j, text;
+      try { ({ res, j, text } = await callModel(c, prompt)); }
+      catch (e) { last = `${MODEL_NAME()}: ${String(e).slice(0, 200)}`; log(`${last}, trying the next model`); break; }
+      if (res.ok) {
+        try { return parseJson(text); } catch { last = `${MODEL_NAME()}: answer was not valid JSON`; log(last); continue; }
+      }
+      last = `${MODEL_NAME()} -> ${res.status}: ${JSON.stringify(j).slice(0, 300)}`;
+      const jsonFail = res.status === 400 && /json_validate_failed/.test(JSON.stringify(j));
+      if (![429, 500, 502, 503, 504].includes(res.status) && !jsonFail) { log(`${MODEL_NAME()} failed (${res.status}), trying the next model`); break; }
+      log(`${MODEL_NAME()} is busy or rate limited (${res.status}), try ${tryNo}/${tries}`);
+      const retryAfter = Number(res.headers.get('retry-after')) || 0;
+      if (tryNo < tries) await sleep(Math.min(Math.max(retryAfter * 1000, 10_000 * tryNo), 30_000));
     }
   }
-  if (!res.ok) throw new Error(`Gemini API error ${res.status} (model ${MODEL}): ${JSON.stringify(j).slice(0, 300)}`);
-  const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
-  return JSON.parse(text.replace(/^```json\s*|```\s*$/g, ''));
+  current = CANDIDATES.length - 1; // keep the last candidate for the next attempt
+  throw new Error(`No LLM could answer. Last error: ${last}`);
 }
 
 // ---------------------------------------------------------------- 4. apply + validate
@@ -275,10 +337,10 @@ try {
   const snapshots = await snapshotSite();
   const ctx = projectContext();
   for (attempts = 1; attempts <= MAX_ATTEMPTS; attempts++) {
-    log(`attempt ${attempts}: asking ${env.LLM_STUB_FILE ? 'stub' : MODEL}`);
-    answer = await askGemini(buildPrompt(snapshots, ctx, failure && `[${failure.stage}]\n${failure.out}`), attempts);
+    log(`attempt ${attempts}: asking ${env.LLM_STUB_FILE ? 'stub' : MODEL_NAME()}`);
+    answer = await askLLM(snapshots, ctx, failure && `[${failure.stage}]\n${failure.out}`, attempts);
     const files = applyAnswer(answer, originals);
-    log(`wrote: ${files.join(', ')}`);
+    log(`wrote (${env.LLM_STUB_FILE ? 'stub' : MODEL_NAME()}): ${files.join(', ')}`);
     const v = validate();
     if (v.ok) { failure = null; break; }
     failure = v;
