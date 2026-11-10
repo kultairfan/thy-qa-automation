@@ -31,3 +31,11 @@ Test site: https://blazedemo.com
 - File name: `features/<JIRA-KEY>.feature`, first line tags: `@<JIRA-KEY> @smoke`
 - Maximum 2 scenarios per story
 - Never type real personal or card data; use obvious test values (e.g. "Test Passenger")
+
+## Added by Step Builder (THY-33)
+
+- `Given I open the BlazeDemo login page`
+- `When I fill the login email with {string}`
+- `When I fill the login password with {string}`
+- `When I click the {string} button`
+- `Then I should see an error message {string}`
