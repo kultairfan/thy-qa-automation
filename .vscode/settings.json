@@ -1,0 +1,15 @@
+{
+  // Cucumber (official extension: CucumberOpen.cucumber-official)
+  // Tells the extension where the feature files and the step definitions are,
+  // so steps are no longer shown as "Undefined step" and Go to Definition works.
+  "cucumber.features": ["features/**/*.feature"],
+  "cucumber.glue": ["steps/**/*.ts"],
+
+  // Same for the "Cucumber (Gherkin) Full Support" extension (alexkrechik.cucumberautocomplete), if you use that one
+  "cucumberautocomplete.steps": ["steps/**/*.ts"],
+  "cucumberautocomplete.syncfeatures": "features/**/*.feature",
+  "cucumberautocomplete.strictGherkinCompletion": true,
+
+  // Generated test files: hide from search
+  "search.exclude": { ".features-gen/**": true }
+}
