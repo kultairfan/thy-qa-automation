@@ -31,12 +31,12 @@ const OPENAI_COMPATIBLE = {
   groq: { url: 'https://api.groq.com/openai/v1/chat/completions', key: env.GROQ_API_KEY, compact: true,
     extra: (model) => ({ max_completion_tokens: 3500, response_format: { type: 'json_object' }, ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}) }) },
   nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions', key: env.NVIDIA_API_KEY, compact: false,
-    extra: () => ({ max_tokens: 6000 }) },
+    extra: () => ({ max_tokens: 8000 }) },
 };
 const CANDIDATES = (env.LLM_ORDER || 'gemini,groq,nvidia').split(',').map((x) => x.trim()).flatMap((provider) => {
   if (provider === 'gemini') return env.GEMINI_API_KEY ? [...new Set([env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3-flash-preview'].filter(Boolean))].map((model) => ({ provider, model })) : [];
   if (provider === 'groq') return env.GROQ_API_KEY ? [{ provider, model: env.GROQ_MODEL || 'openai/gpt-oss-120b' }] : [];
-  if (provider === 'nvidia') return env.NVIDIA_API_KEY ? [{ provider, model: env.NVIDIA_MODEL || 'openai/gpt-oss-120b' }] : [];
+  if (provider === 'nvidia') return env.NVIDIA_API_KEY ? [{ provider, model: env.NVIDIA_MODEL || 'deepseek-ai/deepseek-v4.1-flash' }] : [];
   return [];
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -157,7 +157,7 @@ ${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the f
 
 // ---------------------------------------------------------------- 3. LLM (Gemini, Groq fallback)
 function parseJson(text) {
-  const t = String(text || '').trim().replace(/^```(?:json)?\s*|```\s*$/g, '');
+  const t = String(text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim().replace(/^```(?:json)?\s*|```\s*$/g, '');
   try { return JSON.parse(t); } catch { return JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); }
 }
 
