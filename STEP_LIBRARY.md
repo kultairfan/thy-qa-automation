@@ -48,3 +48,7 @@ Test site: https://blazedemo.com
 ## Added by Step Builder (THY-26)
 
 - `Then each row should display {string}`
+
+## Added by Step Builder (THY-28)
+
+- `Then I should see the text {string}`
