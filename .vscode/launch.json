@@ -2,25 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      // Editörde açık olan .feature dosyasini calistirir (orn. THY-33.feature)
+      // Editörde açık olan .feature dosyasini calistirir (orn. THY-33.feature), tarayici gorunur
       "name": "Run current feature",
       "type": "node",
       "request": "launch",
       "preLaunchTask": "bddgen",
       "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
-      "args": ["test", "${fileBasename}"],
+      "args": ["test", "${fileBasename}", "--headed"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]
     },
     {
-      // Ayni sey, tarayici gorunur sekilde
-      "name": "Run current feature (headed)",
+      // Ayni sey, tarayici gorunmeden (daha hizli)
+      "name": "Run current feature (headless)",
       "type": "node",
       "request": "launch",
       "preLaunchTask": "bddgen",
       "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
-      "args": ["test", "${fileBasename}", "--headed"],
+      "args": ["test", "${fileBasename}"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]
@@ -38,13 +38,13 @@
       "skipFiles": ["<node_internals>/**"]
     },
     {
-      // Tum feature'lar
+      // Tum feature'lar, tarayici gorunur
       "name": "Run all features",
       "type": "node",
       "request": "launch",
       "preLaunchTask": "bddgen",
       "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
-      "args": ["test"],
+      "args": ["test", "--headed"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]
