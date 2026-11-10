@@ -266,6 +266,28 @@ function pageAtFailure() {
   return `\n\nPAGE AT THE MOMENT OF FAILURE (accessibility snapshot):\n${text.slice(start >= 0 ? start : 0).slice(0, 3500)}`;
 }
 
+// Models sometimes use Playwright names without importing them (e.g. "Cannot find name 'Locator'").
+// Add the missing names to the '@playwright/test' import of each written file before the type check.
+const PW_NAMES = [['Locator', true], ['Page', true], ['BrowserContext', true], ['expect', false]];
+function fixImports(files) {
+  for (const f of files) {
+    if (!/\.ts$/.test(f) || !existsSync(f)) continue;
+    let src = readFileSync(f, 'utf8');
+    const code = src.replace(/\/\/.*$/gm, '').replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '""');
+    const imports = [...src.matchAll(/^import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+['"][^'"]+['"];?/gm)];
+    const imported = new Set(imports.flatMap((m) => m[1].split(',').map((x) => x.replace(/\btype\b/, '').split(/\s+as\s+/).pop().trim()).filter(Boolean)));
+    const declared = (n) => new RegExp(`\\b(class|interface|type|const|let|function)\\s+${n}\\b`).test(code);
+    const missing = PW_NAMES.filter(([n, isType]) => !imported.has(n) && !declared(n) && new RegExp(isType ? `\\b${n}\\b` : `\\b${n}\\s*\\(`).test(code.replace(/^import.*$/gm, '')));
+    if (!missing.length) continue;
+    const names = missing.map(([n, isType]) => (isType ? `type ${n}` : n));
+    const pw = src.match(/^import\s+\{([^}]*)\}\s+from\s+['"]@playwright\/test['"];?/m);
+    if (pw) src = src.replace(pw[0], pw[0].replace(/\{([^}]*)\}/, (_, inner) => `{ ${[...inner.split(',').map((x) => x.trim()).filter(Boolean), ...names].join(', ')} }`));
+    else src = `import { ${names.join(', ')} } from '@playwright/test';\n` + src;
+    writeFileSync(f, src);
+    log(`added missing import(s) in ${f}: ${missing.map(([n]) => n).join(', ')}`);
+  }
+}
+
 function validate() {
   const cfg = env.PW_CONFIG ? ` -c ${env.PW_CONFIG}` : '';
   for (const [name, cmd] of [['bddgen', `npx bddgen${cfg}`], ['typecheck', 'npx tsc --noEmit'], ['scenario run', `npx playwright test${cfg} --grep @${KEY} --reporter=line --retries=0`]]) {
@@ -350,6 +372,7 @@ try {
     log(`attempt ${attempts}: asking ${env.LLM_STUB_FILE ? 'stub' : MODEL_NAME()}`);
     answer = await askLLM(snapshots, ctx, failure && `[${failure.stage}]\n${failure.out}`, attempts);
     const files = applyAnswer(answer, originals);
+    fixImports(files);
     log(`wrote (${env.LLM_STUB_FILE ? 'stub' : MODEL_NAME()}): ${files.join(', ')}`);
     const v = validate();
     if (v.ok) { failure = null; break; }
