@@ -23,6 +23,21 @@ const reportDir = 'playwright-report';
 const reportUrl = (process.env.REPORT_URL || '').replace(/\/?$/, process.env.REPORT_URL ? '/' : '');
 const clean = (s) => String(s || '').replace(/\u001b\[[0-9;]*m/g, '');
 
+// What the page showed when a scenario failed, from Playwright's error-context.md (accessibility snapshot)
+function pageText(file) {
+  if (!file || !existsSync(file)) return null;
+  const md = readFileSync(file, 'utf8');
+  const yaml = md.slice(Math.max(0, md.indexOf('```yaml')));
+  const texts = [];
+  for (const line of yaml.split('\n')) {
+    const m = line.match(/^\s*- (?:text|paragraph|strong|alert|status|cell|listitem)?:\s*(.+)$/) || line.match(/^\s*- (?:heading|button|link|textbox|alert) "([^"]+)"/);
+    const t = m && m[1].replace(/^"|"$/g, '').trim();
+    if (t && !texts.includes(t)) texts.push(t);
+    if (texts.length >= 6) break;
+  }
+  return texts.length ? texts.join(' | ').slice(0, 200) : null;
+}
+
 function flattenSteps(steps = [], out = []) {
   for (const s of steps) {
     // playwright-bdd reports every Gherkin step as a test step (Given/When/Then/And ...)
@@ -39,6 +54,8 @@ function collect(suite, path, out) {
       const last = (test.results || []).at(-1) || {};
       const tags = [...new Set([...(spec.tags || []), ...(test.tags || [])].map((t) => (t.startsWith('@') ? t : `@${t}`)))];
       const shots = (last.attachments || []).filter((a) => a.name === 'screenshot' && a.path);
+      const video = (last.attachments || []).find((a) => a.name === 'video' && a.path);
+      const errorContext = (last.attachments || []).find((a) => a.name === 'error-context' && a.path);
       const steps = flattenSteps(last.steps);
       let status = test.status === 'expected' ? 'passed' : test.status === 'skipped' ? 'skipped' : test.status === 'flaky' ? 'flaky' : 'failed';
       let error = last.error ? clean(last.error.message).slice(0, 1500) : null;
@@ -55,7 +72,10 @@ function collect(suite, path, out) {
         durationMs: last.duration || 0,
         steps,
         error,
+        failedStep: status === 'failed' ? (steps.find((s) => s.failed) || {}).title || null : null,
         _screenshotPath: shots.length ? shots[shots.length - 1].path : null,
+        _videoPath: video ? video.path : null,
+        _errorContextPath: errorContext ? errorContext.path : null,
       });
     }
   }
@@ -72,16 +92,32 @@ function prepare() {
     const report = JSON.parse(readFileSync(file, 'utf8'));
     const tests = [];
     for (const suite of report.suites || []) collect(suite, [], tests);
-    // Copy the last-step screenshot of every scenario to a stable path inside the report
+    // Publish the last-step screenshot and the video of every scenario under evidence/ in the report.
+    // The file names carry the story key and the run time, so they stay readable as Jira attachments.
+    const started = new Date(report.stats?.startTime || Date.now());
+    const p2 = (n) => String(n).padStart(2, '0');
+    const local = new Date(started.getTime() + 3 * 3600 * 1000); // Europe/Istanbul (UTC+3)
+    const stamp = `${local.getUTCFullYear()}${p2(local.getUTCMonth() + 1)}${p2(local.getUTCDate())}-${p2(local.getUTCHours())}${p2(local.getUTCMinutes())}`;
+    const publish = (from, name) => {
+      if (!from || !existsSync(from) || !existsSync(reportDir)) return null;
+      mkdirSync(join(reportDir, 'evidence'), { recursive: true });
+      copyFileSync(from, join(reportDir, 'evidence', name));
+      return reportUrl ? `${reportUrl}evidence/${name}` : join(reportDir, 'evidence', name);
+    };
     tests.forEach((t, i) => {
       const key = (t.tags.find((x) => /^@[A-Z][A-Z0-9]+-\d+$/.test(x)) || '@test').slice(1);
-      if (t._screenshotPath && existsSync(t._screenshotPath) && existsSync(reportDir)) {
-        mkdirSync(join(reportDir, 'last-step'), { recursive: true });
-        const name = `${key}-${i + 1}.png`;
-        copyFileSync(t._screenshotPath, join(reportDir, 'last-step', name));
-        t.screenshotUrl = reportUrl ? `${reportUrl}last-step/${name}` : join(reportDir, 'last-step', name);
+      const base = `${key}_${i + 1}_${stamp}`;
+      t.screenshotUrl = publish(t._screenshotPath, `${base}_last-step.png`) || undefined;
+      t.videoUrl = publish(t._videoPath, `${base}_video.webm`) || undefined;
+      if (t.status === 'failed') {
+        // Observation for the bug report: what was expected (the failed step) and what the page showed
+        t.expected = t.failedStep ? t.failedStep.replace(/^(Given|When|Then|And|But)\s+/, '') : null;
+        const shown = pageText(t._errorContextPath);
+        t.observed = shown ? `The page shows: "${shown}"` : null;
       }
       delete t._screenshotPath;
+      delete t._videoPath;
+      delete t._errorContextPath;
     });
     const count = (s) => tests.filter((t) => t.status === s).length;
     summary = {
