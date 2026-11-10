@@ -2,6 +2,7 @@ import { test as base, createBdd } from 'playwright-bdd';
 import { ConfirmationPage, HomePage, PurchasePage, ReservePage } from '../pages/BlazeDemoPages';
 import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
+import { FlightResultsPage } from '../pages/FlightResultsPage';
 
 type Fixtures = {
   homePage: HomePage;
@@ -10,6 +11,7 @@ type Fixtures = {
   confirmationPage: ConfirmationPage;
   loginPage: LoginPage;
   registerPage: RegisterPage;
+  flightResultsPage: FlightResultsPage;
 };
 
 export const test = base.extend<Fixtures>({
@@ -19,6 +21,7 @@ export const test = base.extend<Fixtures>({
   confirmationPage: async ({ page }, use) => use(new ConfirmationPage(page)),
   loginPage: async ({ page }, use) => use(new LoginPage(page)),
   registerPage: async ({ page }, use) => use(new RegisterPage(page)),
+  flightResultsPage: async ({ page }, use) => use(new FlightResultsPage(page)),
 });
 
 export const { Given, When, Then } = createBdd(test);
