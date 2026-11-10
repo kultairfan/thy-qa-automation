@@ -48,6 +48,8 @@ export class PurchasePage {
     this.summary = page.locator('.container').filter({ hasText: 'Total Cost' }).first();
   }
 
+  // Purchase form fields have fixed ids. Any other form (login, register, ...) is found by its label, name or id,
+  // so the step "I fill the {string} field with {string}" works on every form of the site.
   field(name: string): Locator {
     const ids: Record<string, string> = {
       name: 'inputName',
@@ -58,8 +60,13 @@ export class PurchasePage {
       'name on card': 'nameOnCard',
     };
     const id = ids[name.toLowerCase()];
-    if (!id) throw new Error(`Unknown purchase form field "${name}". Known: ${Object.keys(ids).join(', ')}`);
-    return this.page.locator(`#${id}`);
+    if (id) return this.page.locator(`#${id}`);
+    const safe = name.replace(/"/g, '\\"');
+    return this.page
+      .getByLabel(name, { exact: false })
+      .or(this.page.locator(`[name="${safe}" i]`))
+      .or(this.page.locator(`[id="${safe}" i]`))
+      .first();
   }
 
   async purchase() {
