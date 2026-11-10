@@ -159,7 +159,7 @@ ${code}
 
 PAGE SNAPSHOTS (site: ${BASE_URL})
 ${JSON.stringify(pages, compact ? null : undefined, compact ? 0 : 1).slice(0, compact ? 9000 : 30000)}
-${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the full JSON again.\nERROR OUTPUT:\n${previous.slice(compact ? -3500 : -7000)}` : ''}`;
+${previous ? `\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION. Fix it and return the full JSON again.\nERROR OUTPUT:\n${previous.slice(0, compact ? 3500 : 7000)}` : ''}`;
 }
 
 // ---------------------------------------------------------------- 3. LLM (Gemini, Groq fallback)
@@ -320,12 +320,22 @@ function removeDuplicateSteps(files, originals) {
   }
 }
 
+// The useful part of a failed Playwright run: which step failed and the error message (not the tail of the log)
+function failureSummary(out) {
+  const start = out.search(/^\s*1\) \[/m);
+  if (start < 0) return out.slice(-2500);
+  let block = out.slice(start);
+  const end = block.search(/^\s*(attachment #1|Test source)/m);
+  if (end > 0) block = block.slice(0, end);
+  return block.trim().slice(0, 2500);
+}
+
 function validate() {
   const cfg = env.PW_CONFIG ? ` -c ${env.PW_CONFIG}` : '';
   for (const [name, cmd] of [['bddgen', `npx bddgen${cfg}`], ['typecheck', 'npx tsc --noEmit'], ['scenario run', `npx playwright test${cfg} --grep @${KEY} --reporter=line --retries=0`]]) {
     const r = run(cmd);
     log(`${name}: ${r.ok ? 'OK' : 'FAILED'}`);
-    if (!r.ok) return { ok: false, stage: name, out: name === 'scenario run' ? r.out.slice(-3000) + pageAtFailure() : r.out };
+    if (!r.ok) return { ok: false, stage: name, out: name === 'scenario run' ? failureSummary(r.out) + pageAtFailure() : r.out };
   }
   return { ok: true };
 }
@@ -419,7 +429,7 @@ try {
   }
   if (failure) {
     attempts = MAX_ATTEMPTS;
-    await notify({ status: 'failed', attempts, error: `[${failure.stage}] ${failure.out.slice(-3000)}`, newSteps: answer?.newSteps || [] });
+    await notify({ status: 'failed', attempts, error: `[${failure.stage}] ${failure.out.slice(0, 3000)}`, newSteps: answer?.newSteps || [] });
     process.exitCode = 1;
   } else {
     // document the new steps in the library used by the Gherkin writer
