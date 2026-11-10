@@ -50,7 +50,7 @@ jobs:
           STORY: ${{ inputs.story }}
           DRAFT_FEATURE: ${{ inputs.draft_feature }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
         run: node scripts/step-builder.mjs
