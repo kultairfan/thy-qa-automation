@@ -44,3 +44,7 @@ Test site: https://blazedemo.com
 
 - `Given I open the BlazeDemo register page`
 - `When I fill the register field {string} with {string}`
+
+## Added by Step Builder (THY-26)
+
+- `Then each row should display {string}`
