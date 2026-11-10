@@ -21,7 +21,7 @@ Test site: https://blazedemo.com
 
 - `When I choose flight number {int} from the list` (1 = first row)
 - `Then the purchase summary should show {string}` (example: `"Total Cost"`)
-- `When I fill the {string} field with {string}` (field: name, address, city, state, zip code, name on card)
+- `When I fill the {string} field with {string}` (any form field. Purchase form: name, address, city, state, zip code, name on card. Other forms such as login / register: the field label or name, e.g. "email", "password", "Confirm Password")
 - `When I purchase the flight`
 - `Then the confirmation should show a booking {string}` (`"Id"`)
 - `Then the confirmation should show {string} as {string}` (example: `"Status"`, `"PendingCapture"`)
