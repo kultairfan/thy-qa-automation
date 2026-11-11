@@ -52,3 +52,8 @@ Test site: https://blazedemo.com
 ## Added by Step Builder (THY-28)
 
 - `Then I should see the text {string}`
+
+## Added by Step Builder (THY-32)
+
+- `When I click the destination of the week link`
+- `Then I should see an image of the destination`
