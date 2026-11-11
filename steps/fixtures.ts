@@ -4,6 +4,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
 import { FlightResultsPage } from '../pages/FlightResultsPage';
 import { CommonPage } from '../pages/CommonPage';
+import { VacationPage } from '../pages/VacationPage';
 
 type Fixtures = {
   homePage: HomePage;
@@ -14,6 +15,7 @@ type Fixtures = {
   registerPage: RegisterPage;
   flightResultsPage: FlightResultsPage;
   commonPage: CommonPage;
+  vacationPage: VacationPage;
 };
 
 export const test = base.extend<Fixtures>({
@@ -25,6 +27,7 @@ export const test = base.extend<Fixtures>({
   registerPage: async ({ page }, use) => use(new RegisterPage(page)),
   flightResultsPage: async ({ page }, use) => use(new FlightResultsPage(page)),
   commonPage: async ({ page }, use) => use(new CommonPage(page)),
+  vacationPage: async ({ page }, use) => use(new VacationPage(page)),
 });
 
 export const { Given, When, Then } = createBdd(test);
