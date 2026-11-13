@@ -57,3 +57,7 @@ Test site: https://blazedemo.com
 
 - `When I click the destination of the week link`
 - `Then I should see an image of the destination`
+
+## Added by Step Builder (THY-56)
+
+- `When I click the {string} link`
