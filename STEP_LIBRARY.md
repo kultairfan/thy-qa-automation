@@ -61,3 +61,8 @@ Test site: https://blazedemo.com
 ## Added by Step Builder (THY-56)
 
 - `When I click the {string} link`
+
+## Added by Step Builder (THY-47)
+
+- `Then the destination list should contain {string}`
+- `Then the default selected destination should be {string}`
